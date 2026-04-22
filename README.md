@@ -2,7 +2,7 @@
 
 A monitoring dashboard for [OpenZeppelin Guardian](https://github.com/OpenZeppelin/guardian/) nodes.
 
-Guardian is a key-management service for [Miden](https://polygon.technology/polygon-miden) accounts — it holds signing keys, validates state transitions, and cosigns deltas on behalf of accounts. Guardian Cockpit gives operators a real-time view of a running node: liveness, system resource usage, and live logs, with stubs for account/transaction stats that are blocked on upstream API additions (see [Limitations](#limitations)).
+Guardian is a key-management service for [Miden](https://miden.xyz) accounts — it holds signing keys, validates state transitions, and cosigns deltas on behalf of accounts. Guardian Cockpit gives operators a real-time view of a running node: liveness, system resource usage, and live logs, with stubs for account/transaction stats that are blocked on upstream API additions (see [Limitations](#limitations)).
 
 ---
 

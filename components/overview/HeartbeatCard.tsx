@@ -1,0 +1,67 @@
+"use client";
+import useSWR from "swr";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
+import { useRef } from "react";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+interface HealthData {
+  status: "up" | "down";
+  latencyMs: number;
+  checkedAt: string;
+}
+
+export function HeartbeatCard() {
+  const history = useRef<{ t: number; ms: number }[]>([]);
+  const { data } = useSWR<HealthData>("/api/health", fetcher, { refreshInterval: 5000 });
+
+  if (data) {
+    history.current = [...history.current.slice(-19), { t: Date.now(), ms: data.latencyMs }];
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">Heartbeat</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!data ? (
+          <Skeleton className="h-10 w-32" />
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <Badge variant={data.status === "up" ? "default" : "destructive"} className={data.status === "up" ? "bg-emerald-500" : ""}>
+                {data.status === "up" ? "Online" : "Offline"}
+              </Badge>
+              <span className="text-2xl font-bold">{data.latencyMs}ms</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Last checked {new Date(data.checkedAt).toLocaleTimeString()}
+            </p>
+          </>
+        )}
+        {history.current.length > 1 && (
+          <div className="mt-3 h-12">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={history.current}>
+                <Line type="monotone" dataKey="ms" stroke="#8b5cf6" dot={false} strokeWidth={2} />
+                <Tooltip
+                  content={({ active, payload }) =>
+                    active && payload?.length ? (
+                      <div className="rounded bg-background px-2 py-1 text-xs shadow border">
+                        {payload[0].value}ms
+                      </div>
+                    ) : null
+                  }
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

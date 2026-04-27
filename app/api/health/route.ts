@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkHealth } from "@/lib/guardian";
+import { checkHealth } from "@/lib/guardian-client";
 
 export const dynamic = "force-dynamic";
 

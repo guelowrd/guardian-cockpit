@@ -1,0 +1,94 @@
+"use client";
+import useSWR from "swr";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft } from "lucide-react";
+import type { DashboardAccountDetail } from "@openzeppelin/guardian-operator-client";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+interface Props {
+  accountId: string;
+  onBack: () => void;
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 text-sm">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-medium text-right break-all">{value}</span>
+    </div>
+  );
+}
+
+export function AccountDetail({ accountId, onBack }: Props) {
+  const { data } = useSWR<{ account: DashboardAccountDetail; error?: string }>(
+    `/api/accounts/${encodeURIComponent(accountId)}`,
+    fetcher
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to accounts
+      </button>
+
+      {!data ? (
+        <Card><CardContent className="pt-6 space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</CardContent></Card>
+      ) : data.error ? (
+        <div className="text-sm text-muted-foreground">{data.error}</div>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground font-mono truncate">
+              {data.account.accountId}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y">
+            <Row
+              label="Status"
+              value={
+                <Badge className={data.account.stateStatus === "available" ? "bg-emerald-500 text-white" : "bg-zinc-500 text-white"}>
+                  {data.account.stateStatus}
+                </Badge>
+              }
+            />
+            <Row label="Auth scheme" value={data.account.authScheme} />
+            <Row
+              label="Pending candidate"
+              value={data.account.hasPendingCandidate ? <Badge variant="outline" className="border-amber-500 text-amber-500">yes</Badge> : "no"}
+            />
+            <Row
+              label="Commitment"
+              value={<span className="font-mono text-xs">{data.account.currentCommitment ?? "—"}</span>}
+            />
+            <Row label="Created" value={new Date(data.account.createdAt).toLocaleString()} />
+            <Row label="Updated" value={new Date(data.account.updatedAt).toLocaleString()} />
+            {data.account.stateCreatedAt && (
+              <Row label="State created" value={new Date(data.account.stateCreatedAt).toLocaleString()} />
+            )}
+            {data.account.stateUpdatedAt && (
+              <Row label="State updated" value={new Date(data.account.stateUpdatedAt).toLocaleString()} />
+            )}
+            <div className="py-2">
+              <p className="text-sm text-muted-foreground mb-2">
+                Authorized signers ({data.account.authorizedSignerIds.length})
+              </p>
+              <div className="flex flex-col gap-1">
+                {data.account.authorizedSignerIds.map((id) => (
+                  <span key={id} className="font-mono text-xs bg-muted rounded px-2 py-1 break-all">
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -1,62 +1,102 @@
 "use client";
 import useSWR from "swr";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AccountDetail } from "./AccountDetail";
+import type { DashboardAccountSummary } from "@openzeppelin/guardian-operator-client";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface AccountsData {
-  totalAccounts: number;
-  avgTxPerAccount: number;
-  totalTvl: number;
-  avgTvl: number;
-  mocked: boolean;
-}
-
-function formatUsd(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-}
-
-function KpiCard({ label, value, mocked }: { label: string; value: string; mocked: boolean }) {
-  return (
-    <Card>
-      <CardHeader className="pb-1 flex-row items-center justify-between">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        {mocked && (
-          <Badge variant="outline" className="border-amber-500 text-amber-500 text-xs">
-            Needs Guardian API
-          </Badge>
-        )}
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
-  );
+  totalCount: number;
+  accounts: DashboardAccountSummary[];
+  error?: string;
+  available?: false;
 }
 
 export function AccountsPanel() {
   const { data } = useSWR<AccountsData>("/api/accounts", fetcher, { refreshInterval: 30_000 });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (!data) {
-    return <div className="grid grid-cols-2 gap-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28" />)}</div>;
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+      </div>
+    );
+  }
+
+  if (data.available === false) {
+    return (
+      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+        {data.error ?? "Guardian node unavailable"}
+      </div>
+    );
+  }
+
+  if (selectedId) {
+    return <AccountDetail accountId={selectedId} onBack={() => setSelectedId(null)} />;
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {data.mocked && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
-          <strong>Mock data</strong> — These stats require Guardian to expose a{" "}
-          <code className="rounded bg-amber-500/20 px-1">GET /accounts</code> endpoint. Raise this with the Guardian team.
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-4">
-        <KpiCard label="Total Accounts" value={data.totalAccounts.toString()} mocked={data.mocked} />
-        <KpiCard label="Avg Tx / Account" value={data.avgTxPerAccount.toFixed(1)} mocked={data.mocked} />
-        <KpiCard label="Total TVL" value={formatUsd(data.totalTvl)} mocked={data.mocked} />
-        <KpiCard label="Avg TVL / Account" value={formatUsd(data.avgTvl)} mocked={data.mocked} />
+    <div className="flex flex-col gap-4">
+      <div className="text-sm text-muted-foreground">
+        {data.totalCount} account{data.totalCount !== 1 ? "s" : ""} registered
       </div>
+      <Card>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="px-4 py-3 text-left font-medium">Account ID</th>
+                <th className="px-4 py-3 text-left font-medium">Status</th>
+                <th className="px-4 py-3 text-left font-medium">Auth</th>
+                <th className="px-4 py-3 text-left font-medium">Signers</th>
+                <th className="px-4 py-3 text-left font-medium">Pending</th>
+                <th className="px-4 py-3 text-left font-medium">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.accounts.map((a) => (
+                <tr
+                  key={a.accountId}
+                  className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => setSelectedId(a.accountId)}
+                >
+                  <td className="px-4 py-3 font-mono text-xs">{a.accountId}</td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      className={
+                        a.stateStatus === "available"
+                          ? "bg-emerald-500 text-white"
+                          : "bg-zinc-500 text-white"
+                      }
+                    >
+                      {a.stateStatus}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{a.authScheme}</td>
+                  <td className="px-4 py-3">{a.authorizedSignerCount}</td>
+                  <td className="px-4 py-3">
+                    {a.hasPendingCandidate ? (
+                      <Badge variant="outline" className="border-amber-500 text-amber-500 text-xs">
+                        pending
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {new Date(a.updatedAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

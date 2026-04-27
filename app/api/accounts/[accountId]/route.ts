@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { listAccounts } from "@/lib/guardian-client";
+import { getAccount } from "@/lib/guardian-client";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ accountId: string }> }
+) {
   try {
-    const data = await listAccounts();
+    const { accountId } = await params;
+    const data = await getAccount(accountId);
     return NextResponse.json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

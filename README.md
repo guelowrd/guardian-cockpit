@@ -1,104 +1,140 @@
 # Guardian Cockpit
 
-A monitoring dashboard for [OpenZeppelin Guardian](https://github.com/OpenZeppelin/guardian/) nodes.
+A monitoring and management dashboard for [OpenZeppelin Guardian](https://github.com/OpenZeppelin/guardian/) nodes.
 
-Guardian is a key-management service for [Miden](https://miden.xyz) accounts — it holds signing keys, validates state transitions, and cosigns deltas on behalf of accounts. Guardian Cockpit gives operators a real-time view of a running node: liveness, system resource usage, and live logs, with stubs for account/transaction stats that are blocked on upstream API additions (see [Limitations](#limitations)).
+Guardian is a key-management service for [Miden](https://miden.xyz) accounts — it holds Falcon-512 signing keys, validates state transitions, and cosigns transactions on behalf of accounts. Guardian Cockpit gives operators a real-time view of a running node: liveness, account inventory, per-account policy management, and logs.
 
 ---
 
-## What it shows
+## Pages
 
-| Section | Status | Source |
+| Page | Status | Data source |
 |---|---|---|
-| Heartbeat (latency, up/down) | ✅ Live | Polls `GET /pubkey` every 5 s |
-| Node name, network, ports | ✅ Live | Environment variables |
-| CPU / Memory / Network I/O | ✅ Live | OS metrics via `systeminformation` |
-| Container ID & uptime | ✅ Live (optional) | Docker socket |
-| Log viewer with level filter | ✅ Live | Docker API or log file |
-| Account stats (TVL, tx count) | 🔶 Mocked | Needs Guardian `GET /accounts` |
-| Transaction stats (signed/rejected) | 🔶 Mocked | Needs Guardian `GET /accounts` + delta history |
+| **Overview** — heartbeat latency, account totals, operator identity | ✅ Live | Guardian API + env vars |
+| **Logs** — color-coded log viewer with level filter | ✅ Live | Docker API or log file |
+| **Accounts** — full account list with status, signers, pending candidates | ✅ Live | Guardian API (`listAccounts` / `getAccount`) |
+| **Account detail** — per-account fields, signers, policy rule overrides, freeze/unfreeze | ✅ Live + mock overlay | Guardian API; freeze state in localStorage |
+| **Account transactions** — per-account transaction history | 🔶 Mock | Needs Guardian `GET /delta/since` per account |
+| **Transactions** — aggregate signed/rejected stats and volume chart | 🔶 Mock | Needs Guardian `GET /delta/since` across all accounts |
+| **Compliance** — provider config, KYC/whitelist, policy rules | 🔶 Mock | Planned; not yet connected to any provider |
 
 ---
 
 ## Setup
 
-### Environment variables
+### 1. Prerequisites
+
+- Node.js 20+
+- A running Guardian node (local or remote)
+- The operator's **commitment** and **private key** (Falcon-512, hex-encoded) — used to authenticate with the Guardian server
+
+### 2. Environment variables
 
 Copy `.env.example` to `.env.local` and fill in:
 
 ```env
-GUARDIAN_URL=http://localhost:3000     # Guardian HTTP API
-GUARDIAN_NODE_NAME=My Guardian Node
-GUARDIAN_NETWORK=MidenTestnet          # MidenLocal | MidenDevnet | MidenTestnet
-GUARDIAN_HTTP_PORT=3000
-GUARDIAN_GRPC_PORT=50051
-DOCKER_CONTAINER_NAME=                 # optional — enables Docker log streaming + container metadata
-LOG_FILE_PATH=                         # optional fallback if Docker socket unavailable
+# Required
+GUARDIAN_URL=https://guardian.openzeppelin.com   # Guardian HTTP API endpoint
+GUARDIAN_NETWORK=MidenTestnet                    # MidenLocal | MidenDevnet | MidenTestnet | MidenMainnet
+GUARDIAN_OPERATOR_COMMITMENT=0x...               # operator commitment (public key hash)
+GUARDIAN_OPERATOR_PRIVATE_KEY=...                # Falcon-512 private key, hex-encoded
+
+# Optional — log streaming
+DOCKER_CONTAINER_NAME=guardian-server-1          # enables Docker API log streaming
+LOG_FILE_PATH=/var/log/guardian/guardian.log     # fallback if Docker is unavailable
+
+# Optional — dashboard access control (see docs/access-control-options.md)
+DASHBOARD_SECRET=                                # if unset, the dashboard is open to anyone
+```
+
+> **Security note:** If the dashboard is reachable from a public network, set `DASHBOARD_SECRET` to a strong random string. With it set, the login page requires that value as the password. See [`docs/access-control-options.md`](docs/access-control-options.md) for a discussion of more robust multi-user auth options.
+
+### 3. Run
+
+```bash
+npm install
+npm run dev        # → http://localhost:3000
 ```
 
 ---
 
-### Running alongside Guardian via Docker Compose
+## Running alongside Guardian
 
-Add Guardian Cockpit as a sidecar service in your existing `docker-compose.yml`:
+### Docker Compose (recommended)
+
+Add Guardian Cockpit as a sidecar in your `docker-compose.yml`:
 
 ```yaml
 services:
-  server:                              # your existing Guardian service
+  guardian:
     image: ...
 
   cockpit:
-    build: ./guardian-cockpit          # or use the published image
+    build: ./guardian-cockpit
     ports:
-      - "3001:3001"
+      - "3000:3000"
     environment:
-      GUARDIAN_URL: http://server:3000
-      GUARDIAN_NODE_NAME: My Node
+      GUARDIAN_URL: http://guardian:3000
       GUARDIAN_NETWORK: MidenTestnet
-      DOCKER_CONTAINER_NAME: guardian-server-1   # match `docker ps --format '{{.Names}}'`
+      GUARDIAN_OPERATOR_COMMITMENT: "0x..."
+      GUARDIAN_OPERATOR_PRIVATE_KEY: "..."
+      DOCKER_CONTAINER_NAME: guardian   # must match the Guardian container name
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # for log streaming + container metadata
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
-      - server
+      - guardian
 ```
 
-The dashboard will stream logs directly from the Guardian container via the Docker API — no log file mount needed.
+The dashboard will stream logs directly from the Guardian container via the Docker API.
 
----
-
-### Running alongside Guardian started with Cargo
-
-If you're running Guardian directly with `cargo run`, start the dashboard as a plain Node.js process on the same machine:
+### Cargo / local process
 
 ```bash
-npm install
-cp .env.example .env.local
-# Set GUARDIAN_URL to wherever Guardian is listening (default http://localhost:3000)
-# Leave DOCKER_CONTAINER_NAME empty
-# Optionally redirect Guardian's stdout to a file and set LOG_FILE_PATH
-npm run dev        # → http://localhost:3001
-```
+# Start Guardian with its logs redirected to a file
+cargo run 2>&1 | tee /var/log/guardian/guardian.log
 
-System metrics (CPU, memory, network) work in both modes. Docker-specific features (container ID, log streaming via Docker API) are only available when the Docker socket is accessible.
-
----
-
-## Development
-
-```bash
-npm install
-cp .env.example .env.local
+# Start the dashboard
+GUARDIAN_URL=http://localhost:3000 \
+GUARDIAN_OPERATOR_COMMITMENT=0x... \
+GUARDIAN_OPERATOR_PRIVATE_KEY=... \
+LOG_FILE_PATH=/var/log/guardian/guardian.log \
 npm run dev
 ```
 
-Built with Next.js 14 (App Router), Tailwind CSS, shadcn/ui, SWR, Recharts, and `systeminformation`.
+---
+
+## Authentication flow
+
+The dashboard authenticates to the Guardian server using a **challenge-response protocol**:
+
+1. Dashboard calls `GET /challenge` with the operator commitment
+2. Guardian returns a signing digest
+3. Dashboard signs the digest with the operator's Falcon-512 private key (via Miden WASM)
+4. Dashboard calls `POST /verify` with the commitment and signature
+5. Guardian returns a session cookie that is used for all subsequent API calls
+
+The private key never leaves the server process — it is only used server-side to sign challenges.
 
 ---
 
-## Limitations
+## Pending Guardian API features
 
-The Guardian API currently has no endpoint to enumerate accounts registered with a node. Until the upstream adds these, the Accounts and Transactions tabs show mock data:
+Some dashboard sections are mocked because the required Guardian API endpoints do not yet exist:
 
-- `GET /accounts` — list all account IDs on this node
-- `GET /accounts/stats` — aggregate signed/rejected/pending counts
-- `GET /health` — liveness probe with version, network, uptime
+| Feature | Missing endpoint |
+|---|---|
+| Per-account transaction history | `GET /accounts/:id/delta/since` |
+| Aggregate transaction stats | `GET /delta/since` across all accounts |
+| Server info (version, uptime, network) | `GET /health` or `GET /info` |
+| Real-time log streaming | Server-sent events or WebSocket log endpoint |
+
+---
+
+## Tech stack
+
+- **Next.js 16** (App Router, TypeScript)
+- **Tailwind CSS v4**
+- **SWR** — data fetching with polling
+- **Recharts** — charts
+- **Miden WASM** (`@miden-web/miden-wasm`) — Falcon-512 signing
+- **`@openzeppelin/guardian-operator-client`** — typed Guardian API client

@@ -24,7 +24,7 @@ async function verifyToken(secret: string, token: string): Promise<boolean> {
   return diff === 0;
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   if (!SECRET) return NextResponse.next();
   if (OPEN.some((p) => req.nextUrl.pathname.startsWith(p))) return NextResponse.next();
 

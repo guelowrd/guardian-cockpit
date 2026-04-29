@@ -1,11 +1,12 @@
 "use client";
+import Image from "next/image";
 import { NavItem } from "./NavItem";
 import {
   LayoutDashboard,
   ScrollText,
   Users,
   ArrowLeftRight,
-  Shield,
+  ShieldCheck,
 } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -14,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="flex w-56 flex-col bg-zinc-900 px-3 py-6">
         <div className="mb-8 flex items-center gap-2 px-3">
-          <Shield className="h-5 w-5 text-violet-400" />
+          <Image src="/orangerobot.png" alt="Guardian" width={20} height={20} className="shrink-0" />
           <span className="text-sm font-semibold text-white">Guardian Dashboard</span>
         </div>
         <nav className="flex flex-col gap-1">
@@ -22,6 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItem href="/logs" label="Logs" icon={<ScrollText className="h-4 w-4" />} />
           <NavItem href="/accounts" label="Accounts" icon={<Users className="h-4 w-4" />} />
           <NavItem href="/transactions" label="Transactions" icon={<ArrowLeftRight className="h-4 w-4" />} />
+          <NavItem href="/compliance" label="Compliance" icon={<ShieldCheck className="h-4 w-4" />} />
         </nav>
       </aside>
 

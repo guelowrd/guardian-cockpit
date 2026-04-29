@@ -17,6 +17,7 @@ interface HealthData {
 export function HeartbeatCard() {
   const history = useRef<{ t: number; ms: number }[]>([]);
   const { data } = useSWR<HealthData>("/api/health", fetcher, { refreshInterval: 5000 });
+  const { data: opInfo } = useSWR<{ url: string }>("/api/operator-info", fetcher);
 
   if (data) {
     history.current = [...history.current.slice(-19), { t: Date.now(), ms: data.latencyMs }];
@@ -41,6 +42,11 @@ export function HeartbeatCard() {
             <p className="mt-1 text-xs text-muted-foreground">
               Last checked {new Date(data.checkedAt).toLocaleTimeString()}
             </p>
+            {opInfo && (
+              <p className="mt-0.5 text-xs text-zinc-600 truncate">
+                {opInfo.url.replace(/^https?:\/\//, "")}
+              </p>
+            )}
           </>
         )}
         {history.current.length > 1 && (

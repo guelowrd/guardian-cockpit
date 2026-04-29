@@ -1,6 +1,6 @@
 import { HeartbeatCard } from "@/components/overview/HeartbeatCard";
-import { NodeInfoCard } from "@/components/overview/NodeInfoCard";
-import { SystemMetrics } from "@/components/overview/SystemMetrics";
+import { AccountSummaryCard } from "@/components/overview/AccountSummaryCard";
+import { OperatorCard } from "@/components/overview/OperatorCard";
 
 export default function OverviewPage() {
   return (
@@ -8,8 +8,8 @@ export default function OverviewPage() {
       <h1 className="text-xl font-semibold">Overview</h1>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <HeartbeatCard />
-        <NodeInfoCard />
-        <SystemMetrics />
+        <AccountSummaryCard />
+        <OperatorCard />
       </div>
     </div>
   );

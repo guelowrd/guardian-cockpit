@@ -1,26 +1,77 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import type React from "react";
 
 type Level = "ALL" | "INFO" | "WARN" | "ERROR";
 
-// Matches Rust tracing format: "TIMESTAMP  LEVEL module: message"
-const LEVEL_RE = /\s(ERROR|WARN|INFO|DEBUG|TRACE)\s/;
+// Rust tracing: "2024-01-15T10:30:45.123456Z  INFO crate::module: message key=val"
+//           or: "2026-04-04 09:51:28.685882 INFO [module]: message"
+const LINE_RE = /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)\s+(ERROR|WARN|INFO|DEBUG|TRACE)\s+(\S+?):\s*(.*)/;
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const KV_RE = /(\w[\w.]*=)([^\s,}]+)/g;
+
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
+type ParsedLine = {
+  raw: string;
+  ts: string;
+  level: string;
+  module: string;
+  message: string;
+} | null;
+
+function parseLine(line: string): ParsedLine {
+  const clean = stripAnsi(line);
+  const m = clean.match(LINE_RE);
+  if (!m) return null;
+  return { raw: line, ts: m[1], level: m[2], module: m[3], message: stripAnsi(m[4]) };
+}
+
 function detectLevel(line: string): Level {
-  const match = line.match(LEVEL_RE);
-  if (!match) return "INFO";
-  const l = match[1];
-  if (l === "ERROR") return "ERROR";
-  if (l === "WARN") return "WARN";
+  const m = stripAnsi(line).match(LINE_RE);
+  if (!m) return "INFO";
+  if (m[2] === "ERROR") return "ERROR";
+  if (m[2] === "WARN") return "WARN";
   return "INFO";
 }
 
-const levelColor: Record<Level, string> = {
-  ALL: "",
-  INFO: "text-sky-400",
-  WARN: "text-amber-400",
-  ERROR: "text-red-400",
+const levelBadge: Record<string, string> = {
+  ERROR: "text-red-400 font-bold",
+  WARN:  "text-amber-400 font-bold",
+  INFO:  "text-emerald-400",
+  DEBUG: "text-sky-400",
+  TRACE: "text-zinc-500",
 };
+
+function MessageSpans({ text }: { text: string }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  KV_RE.lastIndex = 0;
+  while ((m = KV_RE.exec(text)) !== null) {
+    if (m.index > last) parts.push(<span key={last} className="text-zinc-200">{text.slice(last, m.index)}</span>);
+    parts.push(<span key={m.index + "k"} className="text-violet-400">{m[1]}</span>);
+    parts.push(<span key={m.index + "v"} className="text-cyan-300">{m[2]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<span key={last} className="text-zinc-200">{text.slice(last)}</span>);
+  return <>{parts}</>;
+}
+
+function LogLine({ line }: { line: string }) {
+  const p = parseLine(line);
+  if (!p) return <div className="leading-5 text-zinc-400">{stripAnsi(line)}</div>;
+  return (
+    <div className="leading-5 flex gap-2 min-w-0">
+      <span className="shrink-0 text-zinc-600">{p.ts}</span>
+      <span className={`shrink-0 w-12 text-right ${levelBadge[p.level] ?? "text-zinc-400"}`}>{p.level}</span>
+      <span className="shrink-0 text-zinc-500 max-w-[220px] truncate">{p.module}:</span>
+      <span className="min-w-0 break-all"><MessageSpans text={p.message} /></span>
+    </div>
+  );
+}
 
 export function LogViewer() {
   const [lines, setLines] = useState<string[]>([]);
@@ -94,14 +145,7 @@ export function LogViewer() {
         {visible.length === 0 && (
           <span className="text-muted-foreground">Waiting for log lines…</span>
         )}
-        {visible.map((line, i) => {
-          const level = detectLevel(line);
-          return (
-            <div key={i} className={`leading-5 ${levelColor[level]}`}>
-              {line}
-            </div>
-          );
-        })}
+        {visible.map((line, i) => <LogLine key={i} line={line} />)}
         <div ref={bottomRef} />
       </div>
 
